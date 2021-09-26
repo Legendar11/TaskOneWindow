@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<title>Решение задачи единого окна</title>
+</head>
+
+<body>
+</body>
+<script>
+	class QElement {
+		constructor(element, priority) {
+			this.element = element;
+			this.priority = priority;
+		}
+	}
+
+	class PriorityQueue {
+		constructor() {
+			this.items = [];
+		}
+
+		isEmpty() {
+			return this.items.length === 0;
+		}
+
+		async enqueue(element, priority) {
+			const qElement = new QElement(element, priority);
+			let contain = false;
+
+			for (let i = 0; i < this.items.length; i++) {
+				if (this.items[i].priority < qElement.priority) {
+					this.items.splice(i, 0, qElement);
+					contain = true;
+					break;
+				}
+			}
+
+			if (!contain) {
+				this.items.push(qElement);
+			}
+		}
+
+		dequeue() {
+			if (this.isEmpty())
+				return "Underflow";
+			return this.items.shift();
+		}
+
+		front() {
+			if (this.isEmpty())
+				return "Underflow";
+			return this.items[0];
+		}
+	}
+
+	async function Worker(tasksInput) {
+		let tasks = [];
+		let successCount = 0;
+		let failedCount = 0;
+
+		while (!tasksInput.isEmpty()) {
+			const curTask = tasksInput.dequeue().element;
+			try {
+				await curTask.job();
+				successCount = successCount + 1;
+			} catch {
+				failedCount = failedCount + 1;
+			} finally {
+				tasks.push(curTask.id);
+			}
+		}
+
+		return {
+			successCount,
+			failedCount,
+			tasks
+		};
+	}
+
+	class WorkerClass {
+		tasks = [];
+		successCount = 0;
+		failedCount = 0;
+		isBusy = false;
+
+		async run(task) {
+			try {
+				this.isBusy = true;
+				await task.job();
+				this.successCount = this.successCount + 1;
+			} catch {
+				this.failedCount = this.failedCount + 1;
+			} finally {
+				this.tasks.push(task.id);
+				this.isBusy = false;
+			}
+		}
+
+		report() {
+			return {
+				successCount: this.successCount,
+				failedCount: this.failedCount,
+				tasks: this.tasks
+			}
+		}
+	}
+
+	class TaskManager {
+		constructor(N) {
+			this.workers = Array.from({ length: N }, () => new WorkerClass());
+			this.tasks = new PriorityQueue();
+		}
+
+		async addToQueue(task) {
+			await this.tasks.enqueue(task, task.priority);
+		}
+
+		async run() {
+			while (!this.tasks.isEmpty()) {
+				let promises = [];
+				while (!this.tasks.isEmpty() && this.workers.some(worker => !worker.isBusy)) {
+					const worker = this.workers.find(worker => !worker.isBusy);
+					const curTask = this.tasks.dequeue().element;
+					promises.push(worker.run(curTask));
+				}
+				await Promise.all(promises);
+			}
+			return this.workers.map(worker => worker.report());
+		}
+	}
+
+	(async () => {
+		const generateJob = (id) =>
+			function () {
+				return new Promise((resolve, reject) => {
+					setTimeout(() => {
+						Math.random() > 0.8 ? resolve() : reject();
+					}, 2000);
+				});
+			};
+
+		const tm = new TaskManager(2);
+
+		tm.addToQueue({
+			id: "id0",
+			priority: 10,
+			job: generateJob("id0"),
+		});
+		tm.addToQueue({
+			id: "id1",
+			priority: 1,
+			job: generateJob("id1"),
+		});
+		tm.addToQueue({
+			id: "id2",
+			priority: 10,
+			job: generateJob("id2"),
+		});
+		tm.addToQueue({
+			id: "id3",
+			priority: 5,
+			job: generateJob("id3"),
+		});
+
+		const report = await tm.run();
+		console.log(report);
+	})();
+</script>
+
+</html>
